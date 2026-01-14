@@ -2,55 +2,49 @@
 #include <raylib.h>
 #include <stdlib.h>
 
-#define WIDTH 800
-#define HEIGHT 500
+#define WIDTH 1600
+#define HEIGHT 1000
 
 
-// gcc main.c -g -o main -Wall -Wextra -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
-Vector2 circleVelocity = {1.0,1.0};
-Vector2 circleCenter = {WIDTH/2+3,HEIGHT/2+31};
+// gcc main.c -g -o bin/main -Wall -Wextra -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
 
-void moveCircle(Vector2 *circleCenter);
-void checkEdges();
+typedef struct Circle
+{
+    Vector2 pos;
+    Vector2 vel;
+    float scale;
+}Circle;
+
+Circle circle = {.pos = {WIDTH/2,HEIGHT/2},.vel = {0,0},10.0};
+
+
+
+void draw();
+
+
 int main ()
 {
     InitWindow(WIDTH, HEIGHT, "raylib [core] example - basic window");
+    SetTargetFPS(60);
     while (!WindowShouldClose())
     {
         BeginDrawing();
-            ClearBackground(RAYWHITE);
-            // printf("%f %f\n",circleCenter.x,circleCenter.y);
-            DrawCircle(circleCenter.x,circleCenter.y,10.0,BLACK);
-            moveCircle(&circleCenter);
-            checkEdges();
+            
+            
+            if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+            {
+                draw();
+            }
+
         EndDrawing();
+
     }
 
     CloseWindow();
     return 0;
 }
 
-
-void moveCircle(Vector2 *circleCenter)
+void draw()
 {
-    circleCenter->x += circleVelocity.x;
-    circleCenter->y += circleVelocity.y;
-}
-
-void checkEdges()
-{
-    if (circleCenter.x == WIDTH || circleCenter.x == 0)
-    {
-        printf("PASSED WIDTH\n");
-        printf("x - %f\n",circleCenter.x);
-        circleVelocity.x *= -1;
-        // exit(0);
-    }
-    if (circleCenter.y == HEIGHT || circleCenter.y == 0)
-    {
-        printf("PASSED HEIGHT\n");
-        printf("y - %f\n",circleCenter.y);
-        circleVelocity.y *= -1;
-        // exit(0);
-    }    
+    DrawCircle(circle.pos.x,circle.pos.y,circle.scale,WHITE);
 }
