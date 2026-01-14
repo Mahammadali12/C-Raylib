@@ -8,7 +8,6 @@
 
 
 // gcc main.c -g -o bin/main -Wall -Wextra -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
-Vector2 zero = {0,0};
 
 typedef struct Circle
 {
@@ -19,7 +18,7 @@ typedef struct Circle
 }Circle;
 
 Circle circle = {.pos = {WIDTH/2,HEIGHT/2},.vel = {0,0},.acc = {0,0}, 30.0};
-Vector2 gravity = {0,0.81};
+Vector2 gravity = {0,0.1};
 
 
 void draw();
@@ -35,19 +34,21 @@ int main ()
     SetTargetFPS(60);
     while (!WindowShouldClose())
     {
-        ClearBackground(BLACK);
-            update();
             if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
             {
-                Vector2 wind = {1,0};
+                Vector2 wind = {0.1,0};
                 applyWind(&circle, wind);
             }
-        BeginDrawing();
-
+            // if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            // {
+            //     gravity = (Vector2){0,0};
+            // }
             
+
+        update();
+        BeginDrawing();
+        ClearBackground(BLACK);
             draw();
-
-
         EndDrawing();
         checkBounds(&circle);
 
@@ -71,12 +72,9 @@ void update()
 void updateCircle(Circle* c)
 {
     applyGravity(c);
-
     c->vel = Vector2Add(c->vel,c->acc);
     c->pos = Vector2Add(c->pos,c->vel);
-    c->acc = Vector2Multiply(c->acc,zero);
-
-
+    c->acc = (Vector2){0,0};
 
 }
 
@@ -99,7 +97,7 @@ void checkBounds(Circle* c)
         printf("touching vertical\n");
         
         c->vel.y *= -1;
-        // c->pos.y = HEIGHT;
+        c->pos.y = HEIGHT - c->scale; 
     }
     
 }
