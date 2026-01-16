@@ -2,10 +2,16 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <stdlib.h>
+#include <unistd.h>
 
-#define WIDTH 1500
-#define HEIGHT 1000
-#define PPM  50  //? Pixels_Per_Meter
+#define WIDTH 800
+#define HEIGHT 600
+
+#define PPM  5  //? Pixels_Per_Meter
+
+#define WIDTH_M  (WIDTH/PPM)  //? Width in meters
+#define HEIGHT_M (HEIGHT/PPM) //? Height in meters
+
 #define FRICTION_COEFFICIENT 0.7
 #define DRAG_COEFFICIENT 0.38
 // gcc main.c -g -o bin/main -Wall -Wextra -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
@@ -19,7 +25,7 @@ typedef struct Circle
     float mass; //* kg
 }Circle;
 
-Circle circle1 = {.pos = {WIDTH/2,HEIGHT/2},.vel = {0,0},.acc = {0,0}, 1.0, 1};
+Circle circle1 = {.pos = {WIDTH/2,HEIGHT/2},.vel = {0,0},.acc = {0,0}, 3.0, 3};
 // Circle circle2 = {.pos = {WIDTH/2+100,HEIGHT/2},.vel = {0,0},.acc = {0,0}, 90.0,10};
 Vector2 gravity = {0,9.81};
 
@@ -63,8 +69,8 @@ int main ()
             draw();
         EndDrawing();
         
-        contactEdge(&circle1);
-        checkBounds(&circle1);
+        // contactEdge(&circle1);
+        // checkBounds(&circle1);
 
     }
 
@@ -81,25 +87,31 @@ void draw()
 void update()
 {
     updateCircle(&circle1);
+    
     // updateCircle(&circle2);
     
 }
 
 void updateCircle(Circle* c)
 {
+    
     applyGravity(c,gravity);
     applyDragForce(c);
 
     float dt = GetFrameTime();
-    printf("DT-%f\n",dt);
+    // printf("DT-%f\n",dt);
     c->vel = Vector2Add(c->vel, Vector2Scale(c->acc,dt));
     c->pos = Vector2Add(c->pos, Vector2Scale(c->vel,PPM));
     // c->pos = Vector2Add(c->pos, Vector2Scale(c->vel,dt));
-    printf("ACC: x-%f || y-%f\n",c->acc.x,c->acc.y);
-    printf("VEL: x-%f || y-%f\n",c->vel.x,c->vel.y);
-    printf("POS: x-%f || y-%f\n",c->pos.x,c->pos.y);
+    // printf("\033[H");         // ESC [ H  -- home
+    printf("ACC: x %f || y %f\n",c->acc.x,c->acc.y);
+    printf("VEL: x %f || y %f\n",c->vel.x,c->vel.y);
+    printf("POS: x %f || y %f\n",c->pos.x,c->pos.y);
+    printf("-----------------------\n");
     c->acc = Vector2Zero();
 
+    contactEdge(c);
+    checkBounds(c);
     // c->vel = Vector2Add(c->vel, c->acc);
     // c->pos = Vector2Add(c->pos, c->acc);
     // printf("y- %f\n",c->vel.y);
@@ -136,30 +148,30 @@ void applyFriction(Circle* c)
 
 void checkBounds(Circle* c)
 {
-    if (c->pos.x >= WIDTH - c->scale)
+    if (c->pos.x/PPM >= WIDTH_M - c->scale)
     {
-        printf("touching horizontal\n");
+        // printf("touching horizontal\n");
         c->vel.x *= -1;
-        c->pos.x = WIDTH - c->scale;
+        c->pos.x = WIDTH_M*PPM - c->scale;
         // applyFriction(c);
     }
 
     if (c->pos.x <= 0 + c->scale)
     {
-        printf("touching horizontal\n");
+        // printf("touching horizontal\n");
         c->vel.x *= -1;
         c->pos.x = 0 + c->scale;
         // applyFriction(c);
     }
     
     float loss = 0.9;
-    if (c->pos.y > HEIGHT - c->scale)
+    if (c->pos.y/PPM > HEIGHT_M - c->scale)
     {
-        printf("Bouncing\n");
+        // printf("Bouncing\n");
         
         
         c->vel.y *= -loss;
-        c->pos.y = HEIGHT - c->scale; 
+        c->pos.y = HEIGHT_M*PPM - c->scale; 
         // applyFriction(c);
     }
     if (c->pos.y <= 0 + c->scale)
@@ -177,7 +189,7 @@ void contactEdge(Circle* c)
     if (c->pos.y > HEIGHT - c->scale - 1 )
     {
         applyFriction(c);
-        printf("FRICTION APPLIED\n");
+        // printf("FRICTION APPLIED\n");
     }
     
 }
