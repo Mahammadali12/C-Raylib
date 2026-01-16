@@ -9,6 +9,7 @@
 
 #define PPM  5  //? Pixels_Per_Meter
 
+
 #define WIDTH_M  (WIDTH/PPM)  //? Width in meters
 #define HEIGHT_M (HEIGHT/PPM) //? Height in meters
 
@@ -60,6 +61,12 @@ int main ()
                 applyForce(&circle1, wind);
                 // applyForce(&circle2, wind);
             }
+            if (IsKeyDown(KEY_W))
+            {
+                Vector2 wind = {0,-100};
+                applyForce(&circle1, wind);
+            }
+            
 
 
         update();
@@ -168,10 +175,16 @@ void checkBounds(Circle* c)
     if (c->pos.y/PPM > HEIGHT_M - c->scale)
     {
         // printf("Bouncing\n");
+        if (Vector2Length(c->vel) <= EPSILON)
+        {
+            c->vel = Vector2Zero();
+            c->acc = Vector2Zero();
+            return;
+        }
         
         
         c->vel.y *= -loss;
-        c->pos.y = HEIGHT_M*PPM - c->scale; 
+        c->pos.y = HEIGHT_M*PPM - c->scale*PPM; 
         // applyFriction(c);
     }
     if (c->pos.y <= 0 + c->scale)
