@@ -49,7 +49,7 @@ void applyGravity(Circle* c);
 void checkBounds(Circle* c);
 void applyForce(Circle* c, Vector2 force); // force in Newtons
 void applyFrictionTRASH(Circle* c);
-void applyFriction(Circle* c);
+void applyFriction(Circle* c, float dt);
 void applyDragForce(Circle* c);
 
 int main(void)
@@ -60,8 +60,8 @@ int main(void)
     while (!WindowShouldClose())
     {
         // Example input forces (forces are in Newtons)
-        if (IsKeyDown(KEY_A)) applyForce(&circle1, (Vector2){ -10.1f, 0.0f });
-        if (IsKeyDown(KEY_D)) applyForce(&circle1, (Vector2){  10.1f, 0.0f });
+        if (IsKeyDown(KEY_A)) applyForce(&circle1, (Vector2){ -25.1f, 0.0f });
+        if (IsKeyDown(KEY_D)) applyForce(&circle1, (Vector2){  25.1f, 0.0f });
         if (IsKeyDown(KEY_W)) applyForce(&circle1, (Vector2){   0.0f, -100.0f });
 
         update();
@@ -99,6 +99,8 @@ void updateCircle(Circle* c)
     // Aerodynamic drag (uses velocity in m/s and area in m^2)
     applyDragForce(c);
 
+    applyFriction(c, dt);
+
     // Integrate (semi-implicit Euler)
     c->vel = Vector2Add(c->vel, Vector2Scale(c->acc, dt));   // v += a * dt
     c->pos = Vector2Add(c->pos, Vector2Scale(c->vel, dt));   // x += v * dt
@@ -119,7 +121,6 @@ void updateCircle(Circle* c)
     printf("ACC: x %f || y %f\n", c->acc.x, c->acc.y);
     printf("VEL: x %f || y %f\n", c->vel.x, c->vel.y);
     printf("POS: x %f || y %f\n", c->pos.x, c->pos.y);
-    printf("onGround: %d\n", c->onGround);
     printf("Total Time: %f\n", totalTime);
     printf("-----------------------\n");
 
@@ -161,16 +162,52 @@ void applyFrictionTRASH(Circle* c)
     
 }
 
-void applyFriction(Circle* c)
+void applyFriction(Circle* c, float dt)
 {
-    float frictionMagnitude = FRICTION_COEFFICIENT * c->mass * GRAVITY.y;   //mu * m * g
-    Vector2 friction = c->vel;
-    friction = Vector2Normalize(friction);
-    friction = Vector2Negate(friction);
-    friction = Vector2Scale(friction,frictionMagnitude);
 
-    applyForce(c,friction);
-    printf("Friction applied : %f\n", friction.x);
+    // Check if on ground and kinetic  friction should be applied
+    // After applying gravity and drag to acc
+    Vector2 predicted_vel = Vector2Add(c->vel, Vector2Scale(c->acc, dt));
+    Vector2 predicted_pos = Vector2Add(c->pos, Vector2Scale(predicted_vel, dt));
+    // printf("Predicted POS Y: %f\n", predicted_pos.y + c->scale);
+    // printf("HEIGHT_M: %f\n", HEIGHT_M);
+    // printf("onGround before check: %d\n", c->onGround);
+    
+    if (predicted_pos.y + c->scale >= HEIGHT_M)
+    {
+        c->onGround = 1;
+        // printf("Predicted to be on ground\n");    
+    }
+    else
+    {
+        // printf("Predicted to be in air\n");
+        c->onGround = 0;
+        return;
+    }
+    
+    if (c->onGround == 1)
+    {
+        float frictionMagnitude = FRICTION_COEFFICIENT * c->mass * GRAVITY.y;   //mu * m * g
+
+        float vx = c->vel.x;
+        float speed = fabsf(vx);
+        if (speed < EPSILON)
+        {
+            printf("No friction applied, speed too low\n");
+            return;
+
+        } 
+
+        Vector2 friction = { -vx / speed * frictionMagnitude , 0.0f }; // in Newtons
+        // friction is added as acceleration (F/m) 
+
+        applyForce(c,friction);
+        printf("Friction applied : %f\n", friction.x);
+        // printf("Friction applied : %f\n", friction.y);
+    }
+    
+
+    
 
 }
 
@@ -213,7 +250,7 @@ void checkBounds(Circle* c)
 
             // Apply friction while resting (horizontal only)
             // applyFrictionTRASH(c);
-            applyFriction(c);
+            // applyFriction(c);
         }
     }
     else
