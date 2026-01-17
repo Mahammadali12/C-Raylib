@@ -18,6 +18,8 @@
 #define REST_VEL_THRESHOLD 0.1f   // m/s: impact speed below this -> treat as rest
 #define HORIZONTAL_VEL_SLEEP 0.01f // m/s: horizontal sleep threshold
 
+float totalTime = 0.0f;
+
 typedef struct Circle
 {
     Vector2 pos;   // meters
@@ -46,6 +48,7 @@ void updateCircle(Circle* c);
 void applyGravity(Circle* c);
 void checkBounds(Circle* c);
 void applyForce(Circle* c, Vector2 force); // force in Newtons
+void applyFrictionTRASH(Circle* c);
 void applyFriction(Circle* c);
 void applyDragForce(Circle* c);
 
@@ -87,6 +90,7 @@ void update()
 void updateCircle(Circle* c)
 {
     float dt = GetFrameTime();
+    totalTime += dt;
     if (dt <= 0) return;
 
     // Apply gravity only if NOT in resting contact
@@ -108,12 +112,15 @@ void updateCircle(Circle* c)
         if (fabsf(c->vel.x) < HORIZONTAL_VEL_SLEEP) c->vel.x = 0.0f;
     }
 
+    
+
 
     // Debug (in meters / m/s)
     printf("ACC: x %f || y %f\n", c->acc.x, c->acc.y);
     printf("VEL: x %f || y %f\n", c->vel.x, c->vel.y);
     printf("POS: x %f || y %f\n", c->pos.x, c->pos.y);
     printf("onGround: %d\n", c->onGround);
+    printf("Total Time: %f\n", totalTime);
     printf("-----------------------\n");
 
     // Clear accumulated accelerations (forces must be re-applied each frame)
@@ -137,7 +144,7 @@ void applyGravity(Circle* c)
     }
 }
 
-void applyFriction(Circle* c)
+void applyFrictionTRASH(Circle* c)
 {
     // Apply kinetic friction along horizontal tangent when contacting ground
     float normal = c->mass * GRAVITY.y; // N = m * g (approx, flat ground)
@@ -149,8 +156,22 @@ void applyFriction(Circle* c)
 
     Vector2 friction = { -vx / speed * frictionMagnitude / c->mass, 0.0f };
     // friction is added as acceleration (F/m)
-    c->acc = Vector2Add(c->acc, friction);
-    printf("Friction applied: \n");
+    // c->acc = Vector2Add(c->acc, friction);
+    printf("Friction applied TRASH: %f\n", friction.x);
+    
+}
+
+void applyFriction(Circle* c)
+{
+    float frictionMagnitude = FRICTION_COEFFICIENT * c->mass * GRAVITY.y;   //mu * m * g
+    Vector2 friction = c->vel;
+    friction = Vector2Normalize(friction);
+    friction = Vector2Negate(friction);
+    friction = Vector2Scale(friction,frictionMagnitude);
+
+    applyForce(c,friction);
+    printf("Friction applied : %f\n", friction.x);
+
 }
 
 void checkBounds(Circle* c)
@@ -191,6 +212,7 @@ void checkBounds(Circle* c)
             c->onGround = 1;
 
             // Apply friction while resting (horizontal only)
+            // applyFrictionTRASH(c);
             applyFriction(c);
         }
     }
