@@ -2,83 +2,71 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 #define WIDTH 800
 #define HEIGHT 600
 
-#define PPM  5  //? Pixels_Per_Meter
+// Physics / units
+#define PPM  50.0f              // pixels per meter (tune to taste)
+#define WIDTH_M  ((float)WIDTH / PPM)
+#define HEIGHT_M ((float)HEIGHT / PPM)
 
+#define FRICTION_COEFFICIENT 0.7f
+#define DRAG_COEFFICIENT 0.38f
 
-#define WIDTH_M  (WIDTH/PPM)  //? Width in meters
-#define HEIGHT_M (HEIGHT/PPM) //? Height in meters
-
-#define FRICTION_COEFFICIENT 0.7
-#define DRAG_COEFFICIENT 0.38
-// gcc main.c -g -o bin/main -Wall -Wextra -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+// #define EPSILON 1e-4f
+#define REST_VEL_THRESHOLD 0.1f   // m/s: impact speed below this -> treat as rest
+#define HORIZONTAL_VEL_SLEEP 0.01f // m/s: horizontal sleep threshold
 
 typedef struct Circle
 {
-    Vector2 pos;
-    Vector2 vel;
-    Vector2 acc; 
-    float scale; //*  radius for meter
-    float mass; //* kg
-}Circle;
+    Vector2 pos;   // meters
+    Vector2 vel;   // m/s
+    Vector2 acc;   // m/s^2 (accumulated each frame)
+    float scale;   // radius in meters
+    float mass;    // kg
+    int onGround;  // boolean: 1 if resting contact
+} Circle;
 
-Circle circle1 = {.pos = {WIDTH/2,HEIGHT/2},.vel = {0,0},.acc = {0,0}, 3.0, 3};
-// Circle circle2 = {.pos = {WIDTH/2+100,HEIGHT/2},.vel = {0,0},.acc = {0,0}, 90.0,10};
-Vector2 gravity = {0,9.81};
+// Initialize physics state in meters
+Circle circle1 = {
+    .pos = { (float)WIDTH/2 / PPM, (float)HEIGHT/2 / PPM }, // meters
+    .vel = { 0, 0 },
+    .acc = { 0, 0 },
+    .scale = 0.3f, // meters (was 3.0 before — adjust as you like)
+    .mass = 3.0f,
+    .onGround = 0
+};
 
+const Vector2 GRAVITY = { 0.0f, 9.81f }; // m/s^2 down
 
 void draw();
 void update();
 void updateCircle(Circle* c);
-void applyGravity(Circle* c, Vector2 gravity);
+void applyGravity(Circle* c);
 void checkBounds(Circle* c);
-void applyForce(Circle* c, Vector2 force);
+void applyForce(Circle* c, Vector2 force); // force in Newtons
 void applyFriction(Circle* c);
-void contactEdge(Circle* c);
 void applyDragForce(Circle* c);
 
-int main ()
+int main(void)
 {
-    InitWindow(WIDTH, HEIGHT, "raylib [core] example - basic window");
+    InitWindow(WIDTH, HEIGHT, "Physics: resting contact demo");
     SetTargetFPS(60);
+
     while (!WindowShouldClose())
     {
-            if (IsKeyDown(KEY_A))
-            {
-                // Vector2 wind = {(circle1.pos.x-GetMouseX())/100,(circle1.pos.y-GetMouseY())/100};
-                Vector2 wind = {-10.1,0};
-                applyForce(&circle1, wind);
-                // applyForce(&circle2, wind);
-            }
-            if (IsKeyDown(KEY_D))
-            {
-                // Vector2 wind = {(circle1.pos.x-GetMouseX())/100,(circle1.pos.y-GetMouseY())/100};
-                Vector2 wind = {10.1,0};
-                applyForce(&circle1, wind);
-                // applyForce(&circle2, wind);
-            }
-            if (IsKeyDown(KEY_W))
-            {
-                Vector2 wind = {0,-100};
-                applyForce(&circle1, wind);
-            }
-            
-
+        // Example input forces (forces are in Newtons)
+        if (IsKeyDown(KEY_A)) applyForce(&circle1, (Vector2){ -10.1f, 0.0f });
+        if (IsKeyDown(KEY_D)) applyForce(&circle1, (Vector2){  10.1f, 0.0f });
+        if (IsKeyDown(KEY_W)) applyForce(&circle1, (Vector2){   0.0f, -100.0f });
 
         update();
 
         BeginDrawing();
-        ClearBackground(BLACK);
+            ClearBackground(BLACK);
             draw();
         EndDrawing();
-        
-        // contactEdge(&circle1);
-        // checkBounds(&circle1);
-
     }
 
     CloseWindow();
@@ -87,139 +75,154 @@ int main ()
 
 void draw()
 {
-    DrawCircle(circle1.pos.x,circle1.pos.y,circle1.scale * PPM,GREEN);
-    // DrawCircle(circle2.pos.x,circle2.pos.y,circle2.scale,WHITE);
+    // Convert meters -> pixels for rendering
+    DrawCircle((int)(circle1.pos.x * PPM), (int)(circle1.pos.y * PPM), circle1.scale * PPM, GREEN);
 }
 
 void update()
 {
     updateCircle(&circle1);
-    
-    // updateCircle(&circle2);
-    
 }
 
 void updateCircle(Circle* c)
 {
-    
-    applyGravity(c,gravity);
+    float dt = GetFrameTime();
+    if (dt <= 0) return;
+
+    // Apply gravity only if NOT in resting contact
+    applyGravity(c);
+
+    // Aerodynamic drag (uses velocity in m/s and area in m^2)
     applyDragForce(c);
 
-    float dt = GetFrameTime();
-    // printf("DT-%f\n",dt);
-    c->vel = Vector2Add(c->vel, Vector2Scale(c->acc,dt));
-    c->pos = Vector2Add(c->pos, Vector2Scale(c->vel,PPM));
-    // c->pos = Vector2Add(c->pos, Vector2Scale(c->vel,dt));
-    // printf("\033[H");         // ESC [ H  -- home
-    printf("ACC: x %f || y %f\n",c->acc.x,c->acc.y);
-    printf("VEL: x %f || y %f\n",c->vel.x,c->vel.y);
-    printf("POS: x %f || y %f\n",c->pos.x,c->pos.y);
-    printf("-----------------------\n");
-    c->acc = Vector2Zero();
+    // Integrate (semi-implicit Euler)
+    c->vel = Vector2Add(c->vel, Vector2Scale(c->acc, dt));   // v += a * dt
+    c->pos = Vector2Add(c->pos, Vector2Scale(c->vel, dt));   // x += v * dt
 
-    contactEdge(c);
+    // Ground/contact/collision handling adjusts pos/vel and sets onGround
     checkBounds(c);
-    // c->vel = Vector2Add(c->vel, c->acc);
-    // c->pos = Vector2Add(c->pos, c->acc);
-    // printf("y- %f\n",c->vel.y);
 
+    // Horizontal sleeping: small horizontal vel -> zero to avoid jitter
+    if (c->onGround)
+    {
+        if (fabsf(c->vel.x) < HORIZONTAL_VEL_SLEEP) c->vel.x = 0.0f;
+    }
+
+
+    // Debug (in meters / m/s)
+    printf("ACC: x %f || y %f\n", c->acc.x, c->acc.y);
+    printf("VEL: x %f || y %f\n", c->vel.x, c->vel.y);
+    printf("POS: x %f || y %f\n", c->pos.x, c->pos.y);
+    printf("onGround: %d\n", c->onGround);
+    printf("-----------------------\n");
+
+    // Clear accumulated accelerations (forces must be re-applied each frame)
+    c->acc = Vector2Zero();
 
 }
 
 void applyForce(Circle* c, Vector2 force)
 {
-    Vector2 f = (Vector2){force.x/c->mass, force.y/c->mass};
-    c->acc = Vector2Add(c->acc,f);
+    // force in Newtons -> acceleration (m/s^2)
+    Vector2 a = { force.x / c->mass, force.y / c->mass };
+    c->acc = Vector2Add(c->acc, a);
 }
 
-void applyGravity(Circle* c, Vector2 gravity)
+void applyGravity(Circle* c)
 {
-    // gravity = Vector2Scale(gravity,c->mass);
-    // applyForce(c,gravity);
-
-    c->acc = Vector2Add(c->acc,gravity); //* Alternate Method
-
+    // Only add gravity if not resting
+    if (!c->onGround)
+    {
+        c->acc = Vector2Add(c->acc, GRAVITY);
+    }
 }
 
 void applyFriction(Circle* c)
 {
-    float frictionMagnitude = FRICTION_COEFFICIENT * c->mass * gravity.y;   //mu * m * g
-    Vector2 friction = c->vel;
-    friction = Vector2Normalize(friction);
-    friction = Vector2Negate(friction);
-    friction = Vector2Scale(friction,frictionMagnitude);
+    // Apply kinetic friction along horizontal tangent when contacting ground
+    float normal = c->mass * GRAVITY.y; // N = m * g (approx, flat ground)
+    float frictionMagnitude = FRICTION_COEFFICIENT * normal; // N
 
-    applyForce(c,friction);
+    float vx = c->vel.x;
+    float speed = fabsf(vx);
+    if (speed < EPSILON) return;
 
+    Vector2 friction = { -vx / speed * frictionMagnitude / c->mass, 0.0f };
+    // friction is added as acceleration (F/m)
+    c->acc = Vector2Add(c->acc, friction);
+    printf("Friction applied: \n");
 }
 
 void checkBounds(Circle* c)
 {
-    if (c->pos.x/PPM >= WIDTH_M - c->scale)
+    // Horizontal walls (world in meters)
+    if (c->pos.x + c->scale > WIDTH_M)
     {
-        // printf("touching horizontal\n");
-        c->vel.x *= -1;
-        c->pos.x = WIDTH_M*PPM - c->scale;
-        // applyFriction(c);
+        c->pos.x = WIDTH_M - c->scale;
+        c->vel.x *= -0.5f; // simple bounce loss
+    }
+    if (c->pos.x - c->scale < 0.0f)
+    {
+        c->pos.x = c->scale;
+        c->vel.x *= -0.5f;
     }
 
-    if (c->pos.x <= 0 + c->scale)
+    // Ground (y increases downward)
+    float groundY = HEIGHT_M;
+    if (c->pos.y + c->scale >= groundY)
     {
-        // printf("touching horizontal\n");
-        c->vel.x *= -1;
-        c->pos.x = 0 + c->scale;
-        // applyFriction(c);
-    }
-    
-    float loss = 0.9;
-    if (c->pos.y/PPM > HEIGHT_M - c->scale)
-    {
-        // printf("Bouncing\n");
-        if (Vector2Length(c->vel) <= EPSILON)
+        // We penetrated the ground; correct position to sit on top
+        c->pos.y = groundY - c->scale;
+
+        float impactSpeed = c->vel.y;
+
+        if (fabsf(impactSpeed) > REST_VEL_THRESHOLD)
         {
-            c->vel = Vector2Zero();
-            c->acc = Vector2Zero();
-            return;
+            // Bounce: still a collision
+            const float loss = 0.9f;
+            c->vel.y = -impactSpeed * loss;
+            c->onGround = 0;
         }
-        
-        
-        c->vel.y *= -loss;
-        c->pos.y = HEIGHT_M*PPM - c->scale*PPM; 
-        // applyFriction(c);
-    }
-    if (c->pos.y <= 0 + c->scale)
-    {
-        // printf("touching vertical\n");
+        else
+        {
+            // Resting contact (static)
+            c->vel.y = 0.0f;
+            c->acc.y = 0.0f;
+            c->onGround = 1;
 
-        c->vel.y *= -loss;
-        c->pos.y = 0 + c->scale;
-        // applyFriction(c);
+            // Apply friction while resting (horizontal only)
+            applyFriction(c);
+        }
     }
-}
-
-void contactEdge(Circle* c)
-{
-    if (c->pos.y > HEIGHT - c->scale - 1 )
+    else
     {
-        applyFriction(c);
-        // printf("FRICTION APPLIED\n");
+        // Not touching ground
+        c->onGround = 0;
     }
-    
+
+    // Ceiling
+    if (c->pos.y - c->scale < 0.0f)
+    {
+        c->pos.y = c->scale;
+        c->vel.y *= -0.5f;
+    }
 }
 
 void applyDragForce(Circle* c)
 {
-    // -1/2 * surfaceArea * airDensity * dragCoefficient
-    float surfaceArea = PI * c->scale * c->scale; //surface area of halh circle;
-    float airDensity = 1.225;
     float speed = Vector2Length(c->vel);
+    if (speed < EPSILON) return; // nothing to do
 
-    // float dragMagnitude = 1 * speed * speed;
-    float dragMagnitude = 0.5 * surfaceArea * airDensity * DRAG_COEFFICIENT * speed * speed;
+    // Projected area of a circle: A = π r^2  (r in meters)
+    float area = PI * c->scale * c->scale;
+    float rho = 1.225f;
 
-    Vector2 dragForce = Vector2Normalize(c->vel);
-    dragForce = Vector2Negate(dragForce);
+    float dragMag = 0.5f * rho * DRAG_COEFFICIENT * area * speed * speed; // Newtons
 
-    dragForce = Vector2Scale(dragForce,dragMagnitude);
-    applyForce(c,dragForce);
+    // Direction opposite velocity
+    Vector2 dir = Vector2Scale(Vector2Normalize(c->vel), -1.0f);
+    Vector2 dragForce = Vector2Scale(dir, dragMag);
+
+    // apply as acceleration (F/m)
+    applyForce(c, dragForce);
 }
