@@ -114,9 +114,6 @@ void updateCircle(Circle* c)
         if (fabsf(c->vel.x) < HORIZONTAL_VEL_SLEEP) c->vel.x = 0.0f;
     }
 
-    
-
-
     // Debug (in meters / m/s)
     printf("ACC: x %f || y %f\n", c->acc.x, c->acc.y);
     printf("VEL: x %f || y %f\n", c->vel.x, c->vel.y);
@@ -201,14 +198,19 @@ void applyFriction(Circle* c, float dt)
         Vector2 friction = { -vx / speed * frictionMagnitude , 0.0f }; // in Newtons
         // friction is added as acceleration (F/m) 
 
+        Vector2 v_after_friction = Vector2Add(c->vel, Vector2Scale(friction, dt / c->mass));
+
+        if ((c->vel.x > 0 && v_after_friction.x < 0) || (c->vel.x < 0 && v_after_friction.x > 0))
+        {
+            printf("Friction would reverse velocity, adjusting to stop\n");
+            friction.x = -c->vel.x * c->mass / dt; // total stop
+        }
+        
+
         applyForce(c,friction);
         printf("Friction applied : %f\n", friction.x);
         // printf("Friction applied : %f\n", friction.y);
     }
-    
-
-    
-
 }
 
 void checkBounds(Circle* c)
