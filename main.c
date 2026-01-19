@@ -3,7 +3,7 @@
 #include <raymath.h>
 #include <stdlib.h>
 
-#define WIDTH 800
+#define WIDTH 1500
 #define HEIGHT 600
 
 // Physics / units
@@ -11,6 +11,10 @@
 #define WIDTH_M  ((float)WIDTH / PPM)
 #define HEIGHT_M ((float)HEIGHT / PPM)
 
+
+
+#define AIR_DENSITY 1.225f       // kg/m^3 (at sea level)
+#define LIFT_COEFFICIENT 1.5f    // dimensionless
 #define FRICTION_COEFFICIENT 0.7f
 #define DRAG_COEFFICIENT 0.38f
 
@@ -28,6 +32,7 @@ typedef struct Circle
     float scale;   // radius in meters
     float mass;    // kg
     int onGround;  // boolean: 1 if resting contact
+    float AngleOfAttack; // in radians
 } Circle;
 
 // Initialize physics state in meters
@@ -51,6 +56,8 @@ void applyForce(Circle* c, Vector2 force); // force in Newtons
 void applyFrictionTRASH(Circle* c);
 void applyFriction(Circle* c, float dt);
 void applyDragForce(Circle* c);
+void applyLiftForce(Circle* c);
+
 
 int main(void)
 {
@@ -60,9 +67,20 @@ int main(void)
     while (!WindowShouldClose())
     {
         // Example input forces (forces are in Newtons)
-        if (IsKeyDown(KEY_A)) applyForce(&circle1, (Vector2){ -25.1f, 0.0f });
-        if (IsKeyDown(KEY_D)) applyForce(&circle1, (Vector2){  25.1f, 0.0f });
-        if (IsKeyDown(KEY_W)) applyForce(&circle1, (Vector2){   0.0f, -100.0f });
+        if (IsKeyDown(KEY_A)) applyForce(&circle1, (Vector2){ -495.1f, 0.0f });
+        if (IsKeyDown(KEY_D)) applyForce(&circle1, (Vector2){  495.1f, 0.0f });
+
+        if (IsKeyDown(KEY_W) )
+        {
+            circle1.AngleOfAttack += PI/180; // increase by 1 degree in radians
+        }
+
+        if (IsKeyDown(KEY_S) )
+        {
+            circle1.AngleOfAttack -= PI/180; // decrease by 1 degree in radians
+        }
+
+        
 
         update();
 
@@ -100,6 +118,8 @@ void updateCircle(Circle* c)
     applyDragForce(c);
 
     applyFriction(c, dt);
+
+    applyLiftForce(c);
 
     // Integrate (semi-implicit Euler)
     c->vel = Vector2Add(c->vel, Vector2Scale(c->acc, dt));   // v += a * dt
@@ -286,4 +306,28 @@ void applyDragForce(Circle* c)
 
     // apply as acceleration (F/m)
     applyForce(c, dragForce);
+}
+
+
+void applyLiftForce(Circle* c)
+{
+    // Optional: implement lift force if desired
+    // printf("Lift Force applied:\n");
+    // in degrees for debugging
+    printf("Angle of Attack (degrees): %f\n", c->AngleOfAttack * (180.0f / PI));
+
+    float speed = Vector2Length(c->vel);
+    if (speed < EPSILON) return; // nothing to do
+    float area = PI * c->scale * c->scale;
+    float AoA =  c->AngleOfAttack; 
+    float C_L = LIFT_COEFFICIENT * sinf(2 * AoA);
+    float liftMagnitude = 0.5f * AIR_DENSITY * C_L * area * speed * speed; // Newtons
+
+    Vector2 liftDir = Vector2Normalize(c->vel);
+    liftDir = (Vector2){ -liftDir.y, liftDir.x }; // Perpendicular to velocity
+    Vector2 liftForce = Vector2Scale(liftDir, liftMagnitude);
+    printf("Lift Magnitude: %f\n", liftMagnitude);
+    applyForce(c, liftForce);
+
+
 }
