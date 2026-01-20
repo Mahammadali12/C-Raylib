@@ -57,6 +57,8 @@ void applyFrictionTRASH(Circle* c);
 void applyFriction(Circle* c, float dt);
 void applyDragForce(Circle* c);
 void applyLiftForce(Circle* c);
+void applyInducedDragForce(Circle* c);
+
 
 
 int main(void)
@@ -67,8 +69,8 @@ int main(void)
     while (!WindowShouldClose())
     {
         // Example input forces (forces are in Newtons)
-        if (IsKeyDown(KEY_A)) applyForce(&circle1, (Vector2){ -495.1f, 0.0f });
-        if (IsKeyDown(KEY_D)) applyForce(&circle1, (Vector2){  495.1f, 0.0f });
+        if (IsKeyDown(KEY_A)) applyForce(&circle1, (Vector2){ -95.1f, 0.0f });
+        if (IsKeyDown(KEY_D)) applyForce(&circle1, (Vector2){  95.1f, 0.0f });
 
         if (IsKeyDown(KEY_W) )
         {
@@ -120,6 +122,8 @@ void updateCircle(Circle* c)
     applyFriction(c, dt);
 
     applyLiftForce(c);
+
+    applyInducedDragForce(c);
 
     // Integrate (semi-implicit Euler)
     c->vel = Vector2Add(c->vel, Vector2Scale(c->acc, dt));   // v += a * dt
@@ -329,5 +333,21 @@ void applyLiftForce(Circle* c)
     printf("Lift Magnitude: %f\n", liftMagnitude);
     applyForce(c, liftForce);
 
+}
 
+void applyInducedDragForce(Circle* c)
+{
+    // Optional: implement induced drag if desired
+    float liftCoefficient = LIFT_COEFFICIENT * sinf(2 * c->AngleOfAttack);
+    float k = 1.0f / (PI * 1.0f * 0.9f); // assuming aspect ratio of 1.0 and efficiency factor of 0.9
+    float inducedDragCoefficient = k * liftCoefficient; // assuming aspect ratio of 1.0 and efficiency factor of 0.9
+    float speed = Vector2Length(c->vel);
+    if (speed < EPSILON) return; // nothing to do
+    float area = PI * c->scale * c->scale;
+    float inducedDragMagnitude = 0.5f * AIR_DENSITY * inducedDragCoefficient * area * speed * speed; // Newtons
+    Vector2 dragDir = Vector2Normalize(c->vel);
+    dragDir = Vector2Negate(dragDir); 
+    Vector2 inducedDragForce = Vector2Scale(dragDir, inducedDragMagnitude);
+    printf("Induced Drag Magnitude: %f\n", inducedDragMagnitude);
+    applyForce(c, inducedDragForce);
 }
