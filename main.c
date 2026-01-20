@@ -72,12 +72,12 @@ int main(void)
         if (IsKeyDown(KEY_A)) applyForce(&circle1, (Vector2){ -95.1f, 0.0f });
         if (IsKeyDown(KEY_D)) applyForce(&circle1, (Vector2){  95.1f, 0.0f });
 
-        if (IsKeyDown(KEY_W) )
+        if (IsKeyDown(KEY_W))
         {
             circle1.AngleOfAttack += PI/180; // increase by 1 degree in radians
         }
 
-        if (IsKeyDown(KEY_S) )
+        if (IsKeyDown(KEY_S))
         {
             circle1.AngleOfAttack -= PI/180; // decrease by 1 degree in radians
         }
@@ -120,6 +120,7 @@ void updateCircle(Circle* c)
     applyDragForce(c);
 
     applyFriction(c, dt);
+
 
     applyLiftForce(c);
 
@@ -317,6 +318,16 @@ void applyLiftForce(Circle* c)
 {
     // Optional: implement lift force if desired
     // printf("Lift Force applied:\n");
+
+    if (c->AngleOfAttack > PI/4)
+    {
+        c->AngleOfAttack = PI/4;
+    }
+    else if (c->AngleOfAttack < -PI/9)
+    {
+        c->AngleOfAttack = -PI/9; 
+    }
+    
     // in degrees for debugging
     printf("Angle of Attack (degrees): %f\n", c->AngleOfAttack * (180.0f / PI));
 
@@ -340,7 +351,7 @@ void applyInducedDragForce(Circle* c)
     // Optional: implement induced drag if desired
     float liftCoefficient = LIFT_COEFFICIENT * sinf(2 * c->AngleOfAttack);
     float k = 1.0f / (PI * 1.0f * 0.9f); // assuming aspect ratio of 1.0 and efficiency factor of 0.9
-    float inducedDragCoefficient = k * liftCoefficient; // assuming aspect ratio of 1.0 and efficiency factor of 0.9
+    float inducedDragCoefficient = k * liftCoefficient * liftCoefficient; // assuming aspect ratio of 1.0 and efficiency factor of 0.9
     float speed = Vector2Length(c->vel);
     if (speed < EPSILON) return; // nothing to do
     float area = PI * c->scale * c->scale;
